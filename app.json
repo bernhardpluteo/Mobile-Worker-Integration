@@ -1,0 +1,45 @@
+{
+  "id": "b4cc29c4-f93d-4113-b7f9-a0dc9b791afd",
+  "name": "Mobile Worker Integration",
+  "publisher": "Pluteo (Pty) Ltd",
+  "version": "1.0.0.0",
+  "brief": "",
+  "description": "",
+  "privacyStatement": "",
+  "EULA": "",
+  "help": "",
+  "url": "",
+  "logo": "",
+  "dependencies": [
+    {
+      "id": "1cfb30b3-e464-4594-9510-f6693472e0cc",
+      "name": "Vitek - Customizations",
+      "publisher": "Pluteo (Pty) Ltd",
+      "version": "1.0.0.3"
+    },
+    {
+      "id": "e9d5d908-2671-4e74-bf92-dc15776ae948",
+      "name": "SUManGO Payroll",
+      "publisher": "SUManGO AS",
+      "version": "16.1.3.25"
+    }
+  ],
+  "screenshots": [],
+  "platform": "1.0.0.0",
+  "application": "21.0.0.0",
+  "idRanges": [
+    {
+      "from": 50150,
+      "to": 50200
+    }
+  ],
+  "resourceExposurePolicy": {
+    "allowDebugging": true,
+    "allowDownloadingSource": true,
+    "includeSourceInSymbolFile": true
+  },
+  "runtime": "10.0",
+  "features": [
+    "NoImplicitWith"
+  ]
+}
