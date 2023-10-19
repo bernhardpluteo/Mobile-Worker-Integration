@@ -13,9 +13,9 @@
   "dependencies": [
     {
       "id": "1cfb30b3-e464-4594-9510-f6693472e0cc",
-      "name": "Vitek - Customizations",
+      "name": "Job Management",
       "publisher": "Pluteo (Pty) Ltd",
-      "version": "1.0.0.3"
+      "version": "1.0.0.9"
     },
     {
       "id": "e9d5d908-2671-4e74-bf92-dc15776ae948",
@@ -26,11 +26,11 @@
   ],
   "screenshots": [],
   "platform": "1.0.0.0",
-  "application": "21.0.0.0",
+  "application": "22.0.0.0",
   "idRanges": [
     {
-      "from": 50150,
-      "to": 50200
+      "from": 50200,
+      "to": 50250
     }
   ],
   "resourceExposurePolicy": {
@@ -38,7 +38,7 @@
     "allowDownloadingSource": true,
     "includeSourceInSymbolFile": true
   },
-  "runtime": "10.0",
+  "runtime": "12.0",
   "features": [
     "NoImplicitWith"
   ]
