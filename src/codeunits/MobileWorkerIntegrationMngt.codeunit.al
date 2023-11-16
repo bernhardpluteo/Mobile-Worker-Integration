@@ -253,6 +253,39 @@ codeunit 50200 "Mobile Worker Integration Mngt"
 
     procedure CreateJobAsOrder(Job: Record Job)
     var
+        HttpResponseMessage: HttpResponseMessage;
+        ResponseText: Text;
+    begin
+        HttpResponseMessage := CreateOrderRequest(CreateOrderJSON(Job));
+
+        if HttpResponseMessage.IsSuccessStatusCode then begin
+            HttpResponseMessage.Content.ReadAs(ResponseText);
+            GetOrderID(Job, ResponseText);
+        end else begin
+            HttpResponseMessage.Content.ReadAs(ResponseText);
+            SetMobileWorkerError(Job, ResponseText);
+        end;
+    end;
+
+    procedure CreateSalesOrderAsOrder(var SalesHeader: Record "Sales Header")
+    var
+        HttpResponseMessage: HttpResponseMessage;
+        ResponseText: Text;
+    begin
+
+        HttpResponseMessage := CreateOrderRequest(CreateOrderJSON(SalesHeader));
+
+        if HttpResponseMessage.IsSuccessStatusCode then begin
+            HttpResponseMessage.Content.ReadAs(ResponseText);
+            GetOrderID(SalesHeader, ResponseText);
+        end else begin
+            HttpResponseMessage.Content.ReadAs(ResponseText);
+            SetMobileWorkerError(SalesHeader, ResponseText);
+        end;
+    end;
+
+    local procedure CreateOrderRequest(JsonObject: JsonObject): HttpResponseMessage
+    var
         APISetup: Record "Custom API Setup";
 
         RequestHeader: HttpHeaders;
@@ -263,7 +296,6 @@ codeunit 50200 "Mobile Worker Integration Mngt"
         HttpResponseMessage: HttpResponseMessage;
 
         JSONObjectText: Text;
-        ResponseText: Text;
 
         Url: Text;
         Header: Text;
@@ -273,7 +305,8 @@ codeunit 50200 "Mobile Worker Integration Mngt"
             APISetup.GetAPIHeaderCredentials(Url, Header, HeaderValue)
         else
             exit;
-        CreateOrderJSON(Job).WriteTo(JSONObjectText);
+
+        JsonObject.WriteTo(JSONObjectText);
         HttpContent.WriteFrom(JSONObjectText);
 
         HttpContent.GetHeaders(ContentHeader);
@@ -292,13 +325,7 @@ codeunit 50200 "Mobile Worker Integration Mngt"
 
         HttpClient.Send(HttpRequestMessage, HttpResponseMessage);
         CreateMobileWorkerLogEntry(Enum::"MW Log Entry Type"::"Create Order", JSONObjectText, HttpResponseMessage);
-        if HttpResponseMessage.IsSuccessStatusCode then begin
-            HttpResponseMessage.Content.ReadAs(ResponseText);
-            GetOrderID(Job, ResponseText);
-        end else begin
-            HttpResponseMessage.Content.ReadAs(ResponseText);
-            SetMobileWorkerError(Job, ResponseText);
-        end;
+        exit(HttpResponseMessage);
     end;
 
     local procedure CreateOrderJSON(Job: Record Job): JsonObject
@@ -318,6 +345,23 @@ codeunit 50200 "Mobile Worker Integration Mngt"
         exit(JsonObject);
     end;
 
+    local procedure CreateOrderJSON(SalesHeader: Record "Sales Header"): JsonObject
+    var
+        JsonObject: JsonObject;
+    begin
+        JsonObject.Add('orderKey', SalesHeader."No.");
+        JsonObject.Add('name', SalesHeader.Description);
+        JsonObject.Add('description', SalesHeader."Extended Description");
+        JsonObject.Add('supervisorId', SalesHeader."Mobile Worker Supervisor ID");
+        JsonObject.Add('location', SalesHeader.Location);
+        JsonObject.Add('projectId', SalesHeader."Mobile Worker Project ID");
+        JsonObject.Add('customerId', SalesHeader."Mobile Worker Customer ID");
+        JsonObject.Add('orderStartDate', SalesHeader."Start Date");
+        JsonObject.Add('orderEndDate', SalesHeader."End Date");
+        JsonObject.Add('deliveryDate', SalesHeader."Delivery Date");
+        exit(JsonObject);
+    end;
+
     local procedure GetOrderID(Job: Record Job; ResponseText: Text)
     var
         JsonObject: JsonObject;
@@ -328,6 +372,21 @@ codeunit 50200 "Mobile Worker Integration Mngt"
                 Job.Validate("Mobile Worker Order ID", JsonToken.AsValue().AsCode());
                 Job.Validate("Extended Job Status", Enum::"Extended Job Status"::Created);
                 Job.Modify();
+            end;
+        end else
+            Error('Unable to read JSON Object.');
+    end;
+
+    local procedure GetOrderID(var SalesHeader: Record "Sales Header"; ResponseText: Text)
+    var
+        JsonObject: JsonObject;
+        JsonToken: JsonToken;
+    begin
+        if JsonObject.ReadFrom(ResponseText) then begin
+            if JsonObject.Get('orderId', JsonToken) then begin
+                SalesHeader.Validate("Mobile Worker Order ID", JsonToken.AsValue().AsCode());
+                SalesHeader.Validate("Extended Job Status", Enum::"Extended Job Status"::Created);
+                SalesHeader.Modify();
             end;
         end else
             Error('Unable to read JSON Object.');
@@ -348,6 +407,26 @@ codeunit 50200 "Mobile Worker Integration Mngt"
                         Job.Validate("Extended Job Status", Enum::"Extended Job Status"::Error);
                         Job.Validate("Mobile Worker Error Message", JsonToken.AsValue().AsText());
                         Job.Modify();
+                    end;
+                end;
+            end;
+    end;
+
+    local procedure SetMobileWorkerError(SalesHeader: Record "Sales Header"; ResponseText: Text)
+    var
+        JsonObject: JsonObject;
+        JsonToken: JsonToken;
+        JsonArray: JsonArray;
+    begin
+        if JsonObject.ReadFrom(ResponseText) then
+            if JsonObject.Get('errors', JsonToken) then begin
+                JsonArray := JsonToken.AsArray();
+                if JsonArray.Get(0, JsonToken) then begin
+                    JsonObject := JsonToken.AsObject();
+                    if JsonObject.Get('message', JsonToken) then begin
+                        SalesHeader.Validate("Extended Job Status", Enum::"Extended Job Status"::Error);
+                        SalesHeader.Validate("Mobile Worker Error Message", JsonToken.AsValue().AsText());
+                        SalesHeader.Modify();
                     end;
                 end;
             end;

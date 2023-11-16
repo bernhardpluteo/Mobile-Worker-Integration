@@ -1,12 +1,17 @@
 codeunit 50201 "Mobile Worker Integ. Job Queue"
 {
+    trigger OnRun()
+    begin
+        GetApprovedHours();
+    end;
+
     procedure GetApprovedHours()
     var
         Job: Record Job;
-        JobHours: Record "General Job Hours";
-        TextBuilder: TextBuilder;
-        myText: Text;
+        SalesHeader: Record "Sales Header";
         MobileWorkerIntegrationMngt: Codeunit "Mobile Worker Integration Mngt";
+        TextBuilder: TextBuilder;
+        Parms: Text;
     begin
         TextBuilder.Append('filter=orderKey in (');
         Job.SetFilter("Extended Job Status", '%1|%2', Enum::"Extended Job Status"::Created, Enum::"Extended Job Status"::"Hours Logged");
@@ -14,39 +19,44 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
             repeat
                 TextBuilder.Append(StrSubstNo('''' + Job."No." + ''','));
             until Job.Next() < 1;
+        SalesHeader.SetRange("Document Type", Enum::"Sales Document Type"::Order);
+        SalesHeader.SetFilter("Extended Job Status", '%1|%2', Enum::"Extended Job Status"::Created, Enum::"Extended Job Status"::"Hours Logged");
+        if not SalesHeader.IsEmpty and SalesHeader.FindSet() then
+            repeat
+                TextBuilder.Append(StrSubstNo('''' + SalesHeader."No." + ''','));
+            until SalesHeader.Next() < 1;
         TextBuilder.Remove(TextBuilder.Length, 1);
         TextBuilder.Append(') and isApproved eq true');
-        myText := TextBuilder.ToText();
-        BreakdownJSONResponse(MobileWorkerIntegrationMngt.GetApprovedHoursRequest(myText));
+        Parms := TextBuilder.ToText();
+        BreakdownJSONResponse(MobileWorkerIntegrationMngt.GetApprovedHoursRequest(Parms));
 
     end;
 
     local procedure BreakdownJSONResponse(ResponseText: Text)
     var
+        JobHours: Record "General Job Hours";
+        TimeBank: Record "Time Bank Entries";
         JSONObject: JsonObject;
         JSONTokenTask: JsonToken;
         JSONTokenTaskEvent: JsonToken;
         JSONArrayTasks: JsonArray;
         JSONArrayTaskEvents: JsonArray;
         JSONToken: JsonToken;
-        myText: Text;
-        JSONObject2: JsonObject;
-        Object: JsonObject;
-        Job: Record Job;
-        JobHours: Record "General Job Hours";
-        TimeBank: Record "Time Bank Entries";
+        SourceType: Enum "Job Source Type";
         Change: Boolean;
-        JobNo: Code[20];
+        OrderKey: Code[20];
         UserId: Code[20];
         ApproverId: Code[20];
     begin
-        if noT JSONArrayTasks.ReadFrom(ResponseText) then
+        if not JSONArrayTasks.ReadFrom(ResponseText) then
             Error('No Approved Hours on Job');
         foreach JSONTokenTask in JSONArrayTasks do begin
             JSONObject := JSONTokenTask.AsObject();
             JSONObject.Get('orderKey', JSONToken);
-            JobNo := JSONToken.AsValue().AsCode();
-            JobHours.SetRange("Job No.", JobNo);
+            OrderKey := JSONToken.AsValue().AsCode();
+            CheckSourceType(OrderKey, SourceType);
+            JobHours.SetRange("Source Type", SourceType);
+            JobHours.SetRange("Source No.", OrderKey);
             JSONObject.Get('userId', JSONToken);
             UserId := JSONToken.AsValue().AsCode();
             JSONObject.Get('approvedByUserId', JSONToken);
@@ -85,7 +95,8 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
                     JSONObject.Get('isHours', JSONToken);
                     if JSONToken.AsValue().AsBoolean() then begin
                         JobHours.Init();
-                        JobHours.Validate("Job No.", JobNo);
+                        JobHours.Validate("Source Type", SourceType);
+                        JobHours.Validate("Source No.", OrderKey);
                         GetNextLineNo(JobHours);
                         GetEmployee(JobHours, UserId);
                         GetApprover(JobHours, ApproverId);
@@ -103,17 +114,15 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
                         JSONObject.Get('taskEventId', JSONToken);
                         JobHours.Validate("Mobile Worker Task Event Id", JSONToken.AsValue().AsCode());
                         CheckDifferentDayOvertime(JobHours);
-                        if JobHours.Insert(true) then begin
-                            if Job.Get(JobNo) then begin
-                                Job.Validate("Extended Job Status", Enum::"Extended Job Status"::"Hours Logged");
-                                Job.Modify(true);
-                            end;
-                        end;
+                        if JobHours.Insert(true) then
+                            SetStatus(SourceType, OrderKey);
                     end;
                     JSONObject.Get('isEvent', JSONToken);
                     if JSONToken.AsValue().AsBoolean() then begin
+                        Error('4');
                         TimeBank.Init();
-                        TimeBank.Validate("Job No.", JobNo);
+                        // TimeBank.Validate(S);
+                        // TimeBank.Validate("Job No.", JobNo);
                         GetEmployee(TimeBank, UserId);
                         JSONObject.Get('description', JSONToken);
                         if not JSONToken.AsValue().IsNull then
@@ -133,11 +142,45 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
         end;
     end;
 
+    local procedure CheckSourceType(OrderKey: Code[20]; var SourceType: Enum "Job Source Type")
+    var
+        Job: Record Job;
+        SalesHeader: Record "Sales Header";
+    begin
+        if Job.Get(OrderKey) then
+            SourceType := Enum::"Job Source Type"::Job
+        else
+            if SalesHeader.Get(Enum::"Sales Document Type"::Order, OrderKey) then
+                SourceType := Enum::"Job Source Type"::"Sales Order"
+            else
+                SourceType := Enum::"Job Source Type"::" ";
+    end;
+
+    local procedure SetStatus(SourceType: Enum "Job Source Type"; OrderKey: Code[20])
+    var
+        Job: Record Job;
+        SalesHeader: Record "Sales Header";
+    begin
+        case SourceType of
+            Enum::"Job Source Type"::Job:
+                if Job.Get(OrderKey) then begin
+                    Job.Validate("Extended Job Status", Enum::"Extended Job Status"::"Hours Logged");
+                    Job.Modify(true);
+                end;
+            Enum::"Job Source Type"::"Sales Order":
+                if SalesHeader.Get(Enum::"Sales Document Type"::Order, OrderKey) then begin
+                    SalesHeader.Validate("Extended Job Status", Enum::"Extended Job Status"::"Hours Logged");
+                    SalesHeader.Modify(true);
+                end;
+        end;
+    end;
+
     local procedure GetNextLineNo(var JobHours: Record "General Job Hours")
     var
         JobHours2: Record "General Job Hours";
     begin
-        JobHours2.SetRange("Job No.", JobHours."Job No.");
+        JobHours2.SetRange("Source Type", JobHours."Source Type");
+        JobHours2.SetRange("Source No.", JobHours."Source No.");
         if not JobHours2.IsEmpty and JobHours2.FindLast() then
             JobHours.Validate("Line No.", JobHours2."Line No." + 10000)
         else
@@ -167,9 +210,8 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
         HoursTypeSetup: Record "Job Hour Setup";
     begin
         HoursTypeSetup.SetRange("Mobile Worker Id", TypeID);
-        if not HoursTypeSetup.IsEmpty and HoursTypeSetup.FindFirst() then begin
+        if not HoursTypeSetup.IsEmpty and HoursTypeSetup.FindFirst() then
             JobHours.Validate("Hour Type", HoursTypeSetup."Hour Type");
-        end;
     end;
 
     local procedure GetApprover(var JobHours: Record "General Job Hours"; ApproverID: Code[20])
@@ -182,13 +224,10 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
     end;
 
     local procedure CheckDifferentDayOvertime(var JobHours: Record "General Job Hours")
-    var
-        myInt: Integer;
     begin
-        if JobHours."Start Date" <> JobHours."End Date" then begin
+        if JobHours."Start Date" <> JobHours."End Date" then
             if InsertSecondEntry(JobHours) then
                 CheckStartDaySplitQuantity(JobHours);
-        end;
     end;
 
     procedure CheckStartDaySplitQuantity(var JobHoursEntry: Record "General Job Hours")
@@ -226,7 +265,8 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
         JobHoursEntry2.Validate("Approver No.", JobHoursEntry."Approver No.");
         JobHoursEntry2.Validate("Project No.", JobHoursEntry."Project No.");
         JobHoursEntry2.Validate("Hour Type", JobHoursEntry."Hour Type");
-        JobHoursEntry2.Validate("Job No.", JobHoursEntry."Job No.");
+        JobHoursEntry2.Validate("Source Type", JobHoursEntry."Source Type");
+        JobHoursEntry2.Validate("Source No.", JobHoursEntry."Source No.");
         JobHoursEntry2.Validate("Line No.", JobHoursEntry."Line No." + 10000);
         JobHoursEntry2.Validate("Mobile Worker Task Event Id", JobHoursEntry."Mobile Worker Task Event Id");
         JobHoursEntry2.Validate("End", JobHoursEntry."End");
