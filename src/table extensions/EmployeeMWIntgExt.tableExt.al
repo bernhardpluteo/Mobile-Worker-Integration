@@ -15,7 +15,27 @@ tableextension 50202 "Employee MW Intg. Ext" extends SUM_SP_Employee
                     Error(StrSubstNo(EmployeeErrLbl, Employee."No.", UserID));
             end;
         }
+        field(50156; "Mobile Worker Status"; Text[30])
+        {
+            Caption = 'Mobile Worker Status';
+            DataClassification = CustomerContent;
+        }
+        field(50157; "Moblie Worker Department Id"; Text[30])
+        {
+            DataClassification = CustomerContent;
+        }
     }
+    trigger OnModify()
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        DimensionValue: Record "Dimension Value";
+    begin
+        GeneralLedgerSetup.Get();
+        if Rec."Global Dimension 1 Code" <> xRec."Global Dimension 1 Code" then
+            if DimensionValue.Get(GeneralLedgerSetup."Global Dimension 1 Code", Rec."Global Dimension 1 Code") then
+                Rec.Validate("Moblie Worker Department Id", DimensionValue."Mobile Worker ID");
+    end;
+
     var
         EmployeeErrLbl: Label 'Employee: %1 already has UserID: %2 assigned to them';
 }

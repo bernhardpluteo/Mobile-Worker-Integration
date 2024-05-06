@@ -105,7 +105,7 @@ tableextension 50207 "Sales Header MW Intg Ext" extends "Sales Header"
             if Change then
                 MobileWorkerIntegrationMngt.UpdateOrder(Rec."Mobile Worker Order ID", JSONObject);
         end else
-            if (Rec.Description <> '') and (Rec."Sell-to Customer No." <> '') and (Rec."Project No." <> '') then
+            if (Rec.Description <> '') and (Rec."Sell-to Customer No." <> '') and (Rec."Project No." <> '') and (Rec."Shortcut Dimension 1 Code" <> '') then
                 MobileWorkerIntegrationMngt.CreateSalesOrderAsOrder(Rec);
     end;
 }

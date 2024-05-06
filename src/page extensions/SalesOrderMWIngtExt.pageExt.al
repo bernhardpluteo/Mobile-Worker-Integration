@@ -2,29 +2,6 @@ pageextension 50206 "Sales Order MW Ingt Ext " extends "Sales Order"
 {
     layout
     {
-        addafter(Project)
-        {
-            field("Mobile Worker Order ID"; Rec."Mobile Worker Order ID")
-            {
-                ApplicationArea = All;
-                ToolTip = 'Specifies the value of the Mobile Worker Order ID field.';
-            }
-            field("Mobile Worker Project ID"; Rec."Mobile Worker Project ID")
-            {
-                ApplicationArea = All;
-                ToolTip = 'Specifies the value of the Mobile Worker Project ID field.';
-                Visible = false;
-            }
-        }
-        addafter("Sell-to Customer Name")
-        {
-            field("Mobile Worker Customer ID"; Rec."Mobile Worker Customer ID")
-            {
-                ApplicationArea = All;
-                ToolTip = 'Specifies the value of the Mobile Worker Customer ID field.';
-                Visible = false;
-            }
-        }
         addafter("Extended Job Status")
         {
             field("Mobile Worker Error Message"; Rec."Mobile Worker Error Message")
@@ -34,6 +11,26 @@ pageextension 50206 "Sales Order MW Ingt Ext " extends "Sales Order"
                 Visible = ErrorMsg;
                 StyleExpr = 'Unfavorable';
                 Editable = false;
+            }
+            field("Mobile Worker Order ID"; Rec."Mobile Worker Order ID")
+            {
+                ApplicationArea = All;
+                ToolTip = 'Specifies the value of the Mobile Worker Error Message field.';
+                Editable = false;
+            }
+            field("Mobile Worker Customer ID"; Rec."Mobile Worker Customer ID")
+            {
+                ApplicationArea = All;
+                ToolTip = 'Specifies the value of the Mobile Worker Error Message field.';
+            }
+            field("Mobile Worker Project ID"; Rec."Mobile Worker Project ID")
+            {
+                ApplicationArea = All;
+                ToolTip = 'Specifies the value of the Mobile Worker Error Message field.';
+            }
+            field("Mobile Worker Supervisor ID"; Rec."Mobile Worker Supervisor ID")
+            {
+                ApplicationArea = All;
             }
         }
     }
@@ -52,8 +49,18 @@ pageextension 50206 "Sales Order MW Ingt Ext " extends "Sales Order"
                 var
                     MobileWorkerIntegrationMngt: Codeunit "Mobile Worker Integration Mngt";
                 begin
-                    MobileWorkerIntegrationMngt.CreateSalesOrderAsOrder(Rec);
-                    CurrPage.Update();
+                    if Rec."Mobile Worker Order ID" = '' then
+                        if not (Rec."Shortcut Dimension 1 Code" = '') then begin
+                            MobileWorkerIntegrationMngt.CreateSalesOrderAsOrder(Rec);
+                            if Rec."Extended Job Status" = Enum::"Extended Job Status"::Error then
+                                ErrorMsg := true
+                            else
+                                ErrorMsg := false;
+                        end
+                        else
+                            Error(StrSubstNo(DepartmentRequired))
+                    else
+                        Error(StrSubstNo(JobExistsLbl, Rec."Mobile Worker Order ID"));
                 end;
             }
             action("Pull Hours for Jobs")
@@ -81,6 +88,24 @@ pageextension 50206 "Sales Order MW Ingt Ext " extends "Sales Order"
             ErrorMsg := false;
     end;
 
+    // trigger OnAfterGetCurrRecord()
+    // begin
+    //     if Rec."Extended Job Status" = Enum::"Extended Job Status"::Error then
+    //         ErrorMsg := true
+    //     else
+    //         ErrorMsg := false;
+    // end;
+
+    // trigger OnAfterGetRecord()
+    // begin
+    //     if Rec."Extended Job Status" = Enum::"Extended Job Status"::Error then
+    //         ErrorMsg := true
+    //     else
+    //         ErrorMsg := false;
+    // end;
+
     var
         ErrorMsg: Boolean;
+        JobExistsLbl: Label 'Job already exists in Mobile Worker as OrderId %1';
+        DepartmentRequired: Label 'Global Dimension 1(Department) Required on Job';
 }

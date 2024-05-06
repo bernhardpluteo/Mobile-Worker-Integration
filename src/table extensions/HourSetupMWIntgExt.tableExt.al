@@ -1,4 +1,4 @@
-tableextension 50205 "Hour Setup MW Intg. Ext" extends "Job Hour Setup"
+tableextension 50205 "Hour Setup MW Intg. Ext" extends "Job Hour Type Setup"
 {
     fields
     {

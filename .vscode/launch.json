@@ -2,18 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Microsoft cloud sandbox",
+            "name": "Microsoft cloud sandbox Valen",
             "request": "launch",
             "type": "al",
             "environmentType": "Sandbox",
-            "environmentName": "sandbox",
+            "environmentName": "Sandbox2302",
             "startupObjectId": 22,
             "startupObjectType": "Page",
             "breakOnError": "All",
             "launchBrowser": false,
             "enableLongRunningSqlStatements": true,
             "enableSqlInformationDebugger": true,
-            "tenant": "099e5d99-bb0f-4af8-ab33-ef08dc72dbf9",
+            "tenant": "09d1b864-fa79-4608-bd30-f11fabe102ae",
             "schemaUpdateMode": "ForceSync"
         }
     ]

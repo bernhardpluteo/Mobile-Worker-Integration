@@ -9,33 +9,32 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
     var
         Job: Record Job;
         SalesHeader: Record "Sales Header";
+        SalesInvHeader: Record "Sales Invoice Header";
         MobileWorkerIntegrationMngt: Codeunit "Mobile Worker Integration Mngt";
         TextBuilder: TextBuilder;
+        ProgressDialog: Dialog;
         Parms: Text;
     begin
-        TextBuilder.Append('filter=orderKey in (');
         Job.SetFilter("Extended Job Status", '%1|%2', Enum::"Extended Job Status"::Created, Enum::"Extended Job Status"::"Hours Logged");
         if not Job.IsEmpty and Job.FindSet() then
             repeat
-                TextBuilder.Append(StrSubstNo('''' + Job."No." + ''','));
+                BreakdownJSONResponse(MobileWorkerIntegrationMngt.GetApprovedHoursRequest('filter=orderKey in (''' + Job."No." + ''') and isApproved eq true'));
             until Job.Next() < 1;
         SalesHeader.SetRange("Document Type", Enum::"Sales Document Type"::Order);
         SalesHeader.SetFilter("Extended Job Status", '%1|%2', Enum::"Extended Job Status"::Created, Enum::"Extended Job Status"::"Hours Logged");
         if not SalesHeader.IsEmpty and SalesHeader.FindSet() then
             repeat
-                TextBuilder.Append(StrSubstNo('''' + SalesHeader."No." + ''','));
+                BreakdownJSONResponse(MobileWorkerIntegrationMngt.GetApprovedHoursRequest('filter=orderKey in (''' + SalesHeader."No." + ''') and isApproved eq true'));
             until SalesHeader.Next() < 1;
-        TextBuilder.Remove(TextBuilder.Length, 1);
-        TextBuilder.Append(') and isApproved eq true');
-        Parms := TextBuilder.ToText();
-        BreakdownJSONResponse(MobileWorkerIntegrationMngt.GetApprovedHoursRequest(Parms));
-
+        if SalesInvHeader.FindSet() then
+            repeat
+                BreakdownJSONResponse(MobileWorkerIntegrationMngt.GetApprovedHoursRequest('filter=orderKey in (''' + SalesInvHeader."Order No." + ''') and isApproved eq true'));
+            until SalesInvHeader.Next() < 1;
     end;
 
     local procedure BreakdownJSONResponse(ResponseText: Text)
     var
         JobHours: Record "General Job Hours";
-        TimeBank: Record "Time Bank Entries";
         JSONObject: JsonObject;
         JSONTokenTask: JsonToken;
         JSONTokenTaskEvent: JsonToken;
@@ -47,98 +46,107 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
         OrderKey: Code[20];
         UserId: Code[20];
         ApproverId: Code[20];
+        VehicleId: Integer;
+        ProgressDialog: Dialog;
+        SalesHeader: Record "Sales Header";
+        SalesInvHeader: Record "Sales Invoice Header";
     begin
-        if not JSONArrayTasks.ReadFrom(ResponseText) then
-            Error('No Approved Hours on Job');
-        foreach JSONTokenTask in JSONArrayTasks do begin
-            JSONObject := JSONTokenTask.AsObject();
-            JSONObject.Get('orderKey', JSONToken);
-            OrderKey := JSONToken.AsValue().AsCode();
-            CheckSourceType(OrderKey, SourceType);
-            JobHours.SetRange("Source Type", SourceType);
-            JobHours.SetRange("Source No.", OrderKey);
-            JSONObject.Get('userId', JSONToken);
-            UserId := JSONToken.AsValue().AsCode();
-            JSONObject.Get('approvedByUserId', JSONToken);
-            ApproverId := JSONToken.AsValue().AsCode();
-            JSONObject.Get('taskEvents', JSONTokenTaskEvent);
-            JSONArrayTaskEvents := JSONTokenTaskEvent.AsArray();
-            foreach JSONTokenTaskEvent in JSONArrayTaskEvents do begin
-                JSONObject := JSONTokenTaskEvent.AsObject();
-                JSONObject.Get('taskEventId', JSONToken);
-                JobHours.SetRange("Mobile Worker Task Event Id", Format(JSONToken.AsValue().AsInteger()));
-                if not JobHours.IsEmpty and JobHours.FindSet() then begin
-                    JSONObject.Get('quantity', JSONToken);
-                    if JobHours.Quantity <> JSONToken.AsValue().AsDecimal() then begin
-                        JobHours.Validate(Quantity, JSONToken.AsValue().AsDecimal());
-                        Change := true;
-                    end;
-                    JSONObject.Get('description', JSONToken);
+        if JSONArrayTasks.ReadFrom(ResponseText) then begin
+            ProgressDialog.Open('#1######### \#2########\#3################');
+            foreach JSONTokenTask in JSONArrayTasks do begin
+
+                JSONObject := JSONTokenTask.AsObject();
+                JSONObject.Get('orderKey', JSONToken);
+                OrderKey := JSONToken.AsValue().AsCode();
+                CheckSourceType(OrderKey, SourceType);
+                JobHours.SetRange("Source Type", SourceType);
+                JobHours.SetRange("Source No.", OrderKey);
+                JSONObject.Get('userId', JSONToken);
+                UserId := JSONToken.AsValue().AsCode();
+                JSONObject.Get('approvedByUserId', JSONToken);
+                ApproverId := JSONToken.AsValue().AsCode();
+                if JSONObject.Get('costCenterId', JSONToken) then
                     if not JSONToken.AsValue().IsNull then
-                        if JobHours.Description <> JSONToken.AsValue().AsText() then begin
-                            JobHours.Validate(Description, JSONToken.AsValue().AsText());
+                        VehicleId := JSONToken.AsValue().AsInteger();
+                JSONObject.Get('taskEvents', JSONTokenTaskEvent);
+                JSONArrayTaskEvents := JSONTokenTaskEvent.AsArray();
+                foreach JSONTokenTaskEvent in JSONArrayTaskEvents do begin
+                    JSONObject := JSONTokenTaskEvent.AsObject();
+                    JSONObject.Get('taskEventId', JSONToken);
+                    ProgressDialog.Update(1, OrderKey);
+                    ProgressDialog.Update(2, Format(JSONToken.AsValue().AsInteger()));
+                    JobHours.SetRange("Mobile Worker Task Event Id", Format(JSONToken.AsValue().AsInteger()));
+                    if JobHours.FindFirst() then begin
+                        JSONObject.Get('quantity', JSONToken);
+                        if JobHours.Quantity <> JSONToken.AsValue().AsDecimal() then begin
+                            JobHours.Validate(Quantity, JSONToken.AsValue().AsDecimal());
                             Change := true;
                         end;
-                    JSONObject.Get('start', JSONToken);
-                    if JobHours.Start <> JSONToken.AsValue().AsDateTime() then begin
-                        JobHours.Validate(Start, JSONToken.AsValue().AsDateTime());
-                        Change := true;
-                    end;
-                    JSONObject.Get('end', JSONToken);
-                    if JobHours."End" <> JSONToken.AsValue().AsDateTime() then begin
-                        JobHours.Validate("End", JSONToken.AsValue().AsDateTime());
-                        Change := true;
-                    end;
-                    if Change then
-                        JobHours.Modify(true);
-                end else begin
-                    JSONObject.Get('isHours', JSONToken);
-                    if JSONToken.AsValue().AsBoolean() then begin
+                        JSONObject.Get('description', JSONToken);
+                        if not (JSONToken.AsValue().IsNull) then
+                            if not (JSONToken.AsValue().AsText() = '') then
+                                if JobHours.Description <> JSONToken.AsValue().AsText() then begin
+                                    ProgressDialog.Update(3, JSONToken.AsValue().AsText());
+                                    JobHours.Validate(Description, JSONToken.AsValue().AsText());
+                                    Change := true;
+                                end;
+                        JSONObject.Get('start', JSONToken);
+                        if JobHours.Start <> JSONToken.AsValue().AsDateTime() then begin
+                            JobHours.Validate(Start, JSONToken.AsValue().AsDateTime());
+                            Change := true;
+                        end;
+                        JSONObject.Get('end', JSONToken);
+                        if JobHours."End" <> JSONToken.AsValue().AsDateTime() then begin
+                            JobHours.Validate("End", JSONToken.AsValue().AsDateTime());
+                            Change := true;
+                        end;
+                        if Change then
+                            JobHours.Modify(true);
+                    end else begin
                         JobHours.Init();
                         JobHours.Validate("Source Type", SourceType);
-                        JobHours.Validate("Source No.", OrderKey);
+                        if JobHours."Source Type" = Enum::"Job Source Type"::"Sales Order" then begin
+                            if SalesHeader.Get(Enum::"Sales Document Type"::Order, OrderKey) then
+                                JobHours.Validate("Source No.", OrderKey)
+                            else begin
+                                SalesInvHeader.SetRange("Order No.", OrderKey);
+                                if SalesInvHeader.FindFirst() then begin
+                                    JobHours."Source No." := OrderKey;
+                                    JobHours.Validate("Project No.", SalesInvHeader."Project No.");
+                                    JobHours.Validate("Shortcut Dimension 3 Code", SalesInvHeader."Project No.");
+                                end;
+                            end;
+                        end else
+                            if JobHours."Source Type" = Enum::"Job Source Type"::Job then
+                                JobHours.Validate("Source No.", OrderKey);
                         GetNextLineNo(JobHours);
                         GetEmployee(JobHours, UserId);
                         GetApprover(JobHours, ApproverId);
+                        GetGlobalDimensionOne(JobHours);
+                        GetGlobalDimensionTwo(JobHours, VehicleId);
                         JSONObject.Get('description', JSONToken);
-                        if not JSONToken.AsValue().IsNull then
+                        if not JSONToken.AsValue().IsNull then begin
+                            ProgressDialog.Update(3, JSONToken.AsValue().AsText());
                             JobHours.Validate(Description, JSONToken.AsValue().AsText());
+                        end;
                         JSONObject.Get('taskEventTypeId', JSONToken);
-                        GetHourType(JobHours, JSONToken.AsValue().AsCode());
-                        JSONObject.Get('start', JSONToken);
-                        JobHours.Validate(Start, JSONToken.AsValue().AsDateTime());
-                        JSONObject.Get('end', JSONToken);
-                        JobHours.Validate("End", JSONToken.AsValue().AsDateTime());
-                        JSONObject.Get('quantity', JSONToken);
-                        JobHours.Validate(Quantity, JSONToken.AsValue().AsDecimal());
-                        JSONObject.Get('taskEventId', JSONToken);
-                        JobHours.Validate("Mobile Worker Task Event Id", JSONToken.AsValue().AsCode());
-                        CheckDifferentDayOvertime(JobHours);
-                        if JobHours.Insert(true) then
-                            SetStatus(SourceType, OrderKey);
-                    end;
-                    JSONObject.Get('isEvent', JSONToken);
-                    if JSONToken.AsValue().AsBoolean() then begin
-                        Error('4');
-                        TimeBank.Init();
-                        // TimeBank.Validate(S);
-                        // TimeBank.Validate("Job No.", JobNo);
-                        GetEmployee(TimeBank, UserId);
-                        JSONObject.Get('description', JSONToken);
-                        if not JSONToken.AsValue().IsNull then
-                            TimeBank.Validate(Description, JSONToken.AsValue().AsText());
-                        JSONObject.Get('start', JSONToken);
-                        TimeBank.Validate(Start, JSONToken.AsValue().AsDateTime());
-                        JSONObject.Get('end', JSONToken);
-                        TimeBank.Validate("End", JSONToken.AsValue().AsDateTime());
-                        JSONObject.Get('quantity', JSONToken);
-                        TimeBank.Validate(Quantity, JSONToken.AsValue().AsDecimal());
-                        JSONObject.Get('taskEventId', JSONToken);
-                        TimeBank.Validate("Mobile Worker Task Event Id", JSONToken.AsValue().AsCode());
-                        TimeBank.Insert(true);
+                        if CheckHourType(JobHours, JSONToken.AsValue().AsCode()) then begin
+                            JSONObject.Get('start', JSONToken);
+                            JobHours.Validate(Start, JSONToken.AsValue().AsDateTime());
+                            JSONObject.Get('end', JSONToken);
+                            JobHours.Validate("End", JSONToken.AsValue().AsDateTime());
+                            JSONObject.Get('quantity', JSONToken);
+                            JobHours.Validate(Quantity, JSONToken.AsValue().AsDecimal());
+                            JSONObject.Get('taskEventId', JSONToken);
+                            JobHours.Validate("Mobile Worker Task Event Id", JSONToken.AsValue().AsCode());
+                            CheckDifferentDayOvertime(JobHours);
+                            if JobHours.Insert(true) then
+                                SetStatus(SourceType, OrderKey);
+                        end;
                     end;
                 end;
             end;
+            ProgressDialog.Close();
         end;
     end;
 
@@ -146,14 +154,20 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
     var
         Job: Record Job;
         SalesHeader: Record "Sales Header";
+        SalesInvHeader: Record "Sales Invoice Header";
     begin
         if Job.Get(OrderKey) then
             SourceType := Enum::"Job Source Type"::Job
         else
             if SalesHeader.Get(Enum::"Sales Document Type"::Order, OrderKey) then
                 SourceType := Enum::"Job Source Type"::"Sales Order"
-            else
-                SourceType := Enum::"Job Source Type"::" ";
+            else begin
+                SalesInvHeader.SetRange("Order No.", OrderKey);
+                if SalesInvHeader.FindFirst() then
+                    SourceType := Enum::"Job Source Type"::"Sales Order"
+                else
+                    SourceType := Enum::"Job Source Type"::" ";
+            end;
     end;
 
     local procedure SetStatus(SourceType: Enum "Job Source Type"; OrderKey: Code[20])
@@ -205,13 +219,79 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
             TimeBank.Validate("Employee No.", Employee."No.");
     end;
 
-    local procedure GetHourType(var JobHours: Record "General Job Hours"; TypeID: Code[20])
+    local procedure CheckHourType(var JobHours: Record "General Job Hours"; TypeID: Code[20]): Boolean
     var
-        HoursTypeSetup: Record "Job Hour Setup";
+        HoursTypeSetup: Record "Job Hour Type Setup";
     begin
         HoursTypeSetup.SetRange("Mobile Worker Id", TypeID);
-        if not HoursTypeSetup.IsEmpty and HoursTypeSetup.FindFirst() then
+        if not HoursTypeSetup.IsEmpty and HoursTypeSetup.FindFirst() then begin
             JobHours.Validate("Hour Type", HoursTypeSetup."Hour Type");
+            exit(true);
+        end else
+            exit(false);
+    end;
+
+    local procedure GetGlobalDimensionOne(var JobHours: Record "General Job Hours")
+    var
+        Job: Record Job;
+        SalesHeader: Record "Sales Header";
+        SalesInvHeader: Record "Sales Invoice Header";
+    begin
+        if JobHours."Source Type" = Enum::"Job Source Type"::Job then begin
+            Job.Get(JobHours."Source No.");
+            JobHours.Validate("Global Dimension 1 Code", Job."Global Dimension 1 Code");
+        end else
+            if JobHours."Source Type" = Enum::"Job Source Type"::"Sales Order" then begin
+                if SalesHeader.Get(Enum::"Sales Document Type"::Order, JobHours."Source No.") then
+                    JobHours.Validate("Global Dimension 1 Code", SalesHeader."Shortcut Dimension 1 Code")
+                else begin
+                    SalesInvHeader.SetRange("Order No.", JobHours."Source No.");
+                    if SalesInvHeader.FindFirst() then
+                        JobHours.Validate("Global Dimension 1 Code", SalesInvHeader."Shortcut Dimension 1 Code");
+                end;
+            end;
+    end;
+
+    local procedure GetGlobalDimensionTwo(var JobHours: Record "General Job Hours"; VehicleId: Integer)
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        DimensionValue: Record "Dimension Value";
+    begin
+        GeneralLedgerSetup.Get();
+        DimensionValue.SetRange("Dimension Code", GeneralLedgerSetup."Global Dimension 2 Code");
+        DimensionValue.SetRange("Mobile Worker ID", Format(VehicleId));
+        if not DimensionValue.IsEmpty and DimensionValue.FindFirst() then
+            JobHours.Validate("Global Dimension 2 Code", DimensionValue.Code);
+    end;
+
+    local procedure ShortcutDimension3(var JobHours: Record "General Job Hours")
+    var
+        Job: Record Job;
+        SalesHeader: Record "Sales Header";
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        DimensionSetEntry: Record "Dimension Set Entry";
+        DefaultDimension: Record "Default Dimension";
+        SalesInvHeader: Record "Sales Invoice Header";
+    begin
+        GeneralLedgerSetup.Get();
+        if JobHours."Source Type" = Enum::"Job Source Type"::Job then begin
+            Job.Get(JobHours."Source No.");
+            DefaultDimension.Get(Job.RecordId.TableNo, Job."No.", GeneralLedgerSetup."Shortcut Dimension 3 Code");
+            JobHours.Validate("Shortcut Dimension 3 Code", DefaultDimension."Dimension Value Code");
+
+        end else
+            if JobHours."Source Type" = Enum::"Job Source Type"::"Sales Order" then begin
+                if SalesHeader.Get(Enum::"Sales Document Type"::Order, JobHours."Source No.") then begin
+                    DimensionSetEntry.Get(SalesHeader."Dimension Set ID", GeneralLedgerSetup."Shortcut Dimension 3 Code");
+                    JobHours.Validate("Shortcut Dimension 3 Code", DimensionSetEntry."Dimension Value Code");
+                end else begin
+                    SalesInvHeader.SetRange("Order No.", JobHours."Source No.");
+                    if SalesInvHeader.FindFirst() then begin
+                        DimensionSetEntry.Get(SalesInvHeader."Dimension Set ID", GeneralLedgerSetup."Shortcut Dimension 3 Code");
+                        JobHours.Validate("Shortcut Dimension 3 Code", DimensionSetEntry."Dimension Value Code");
+                    end;
+                end;
+            end;
     end;
 
     local procedure GetApprover(var JobHours: Record "General Job Hours"; ApproverID: Code[20])
@@ -259,20 +339,59 @@ codeunit 50201 "Mobile Worker Integ. Job Queue"
     var
         JobHoursEntry2: Record "General Job Hours";
     begin
-        JobHoursEntry2.Init();
-        JobHoursEntry2.Validate("Employee No.", JobHoursEntry."Employee No.");
-        JobHoursEntry2.Validate(Description, JobHoursEntry.Description);
-        JobHoursEntry2.Validate("Approver No.", JobHoursEntry."Approver No.");
-        JobHoursEntry2.Validate("Project No.", JobHoursEntry."Project No.");
-        JobHoursEntry2.Validate("Hour Type", JobHoursEntry."Hour Type");
-        JobHoursEntry2.Validate("Source Type", JobHoursEntry."Source Type");
-        JobHoursEntry2.Validate("Source No.", JobHoursEntry."Source No.");
+        // JobHoursEntry2.Init();
+        JobHoursEntry2.TransferFields(JobHoursEntry, true);
         JobHoursEntry2.Validate("Line No.", JobHoursEntry."Line No." + 10000);
-        JobHoursEntry2.Validate("Mobile Worker Task Event Id", JobHoursEntry."Mobile Worker Task Event Id");
-        JobHoursEntry2.Validate("End", JobHoursEntry."End");
         JobHoursEntry2.Validate(Start, CreateDateTime(JobHoursEntry."End Date", 0T));
         JobHoursEntry2.Validate(Quantity, CheckEndDaySplitQuantity(JobHoursEntry2));
+        // JobHoursEntry2.Validate("Employee No.", JobHoursEntry."Employee No.");
+        // JobHoursEntry2.Validate(Description, JobHoursEntry.Description);
+        // JobHoursEntry2.Validate("Approver No.", JobHoursEntry."Approver No.");
+        // JobHoursEntry2.Validate("Project No.", JobHoursEntry."Project No.");
+        // JobHoursEntry2.Validate("Hour Type", JobHoursEntry."Hour Type");
+        // JobHoursEntry2.Validate("Source Type", JobHoursEntry."Source Type");
+        // JobHoursEntry2."Source No." := JobHoursEntry."Source No.";
+        // JobHoursEntry2.SourceId := JobHoursEntry.SourceId;
+        // JobHoursEntry2.Validate("Line No.", JobHoursEntry."Line No." + 10000);
+        // JobHoursEntry2.Validate("Mobile Worker Task Event Id", JobHoursEntry."Mobile Worker Task Event Id");
+        // JobHoursEntry2.Validate("End", JobHoursEntry."End");
+        // JobHoursEntry2.Validate(Start, CreateDateTime(JobHoursEntry."End Date", 0T));
+        // JobHoursEntry2.Validate(Quantity, CheckEndDaySplitQuantity(JobHoursEntry2));
+        // JobHoursEntry2.Validate("Global Dimension 1 Code", JobHoursEntry."Global Dimension 1 Code");
+        // JobHoursEntry2.Validate("Global Dimension 2 Code", JobHoursEntry."Global Dimension 2 Code");
+        // JobHoursEntry2.Validate("Shortcut Dimension 3 Code", JobHoursEntry."Shortcut Dimension 3 Code");
         if JobHoursEntry2.Insert(true) then
             exit(true);
     end;
+
+    // local procedure CheckSupervisorBonus(JobHoursEntry: Record "General Job Hours")
+    // var
+    //     SUM_SP_Settings: Record SUM_SP_Settings;
+    //     Job: Record Job;
+    //     SalesHeader: Record "Sales Header";
+    // begin
+    //     SUM_SP_Settings.Get();
+    //     if SUM_SP_Settings.CheckSupervisorBonus() then
+    //         case JobHoursEntry."Source Type" of
+    //             Enum::"Job Source Type"::Job:
+    //                 if Job.Get(JobHoursEntry."Source No.") then
+    //                     if Job."Team Supervisor No." = JobHoursEntry."Employee No." then
+    //                         CreateSupervisorBonusJobEntry(JobHoursEntry);
+    //             Enum::"Job Source Type"::"Sales Order":
+    //                 if SalesHeader.Get(Enum::"Sales Document Type"::Order, JobHoursEntry."Source No.") then
+    //                     if SalesHeader."Team Supervisor No." = JobHoursEntry."Employee No." then
+    //                         CreateSupervisorBonusJobEntry(JobHoursEntry);
+    //         end;
+    // end;
+
+    // local procedure CreateSupervisorBonusJobEntry(JobHoursEntry: Record "General Job Hours")
+    // var
+    //     SupervisorBonusJobHourEntry: Record "General Job Hours";
+    // begin
+    //     SupervisorBonusJobHourEntry.Init();
+    //     SupervisorBonusJobHourEntry.TransferFields(JobHoursEntry);
+    //     GetNextLineNo(SupervisorBonusJobHourEntry);
+    //     SupervisorBonusJobHourEntry."Hour Type" := Enum::"Hour Type"::"Supervisor Hours";
+    //     SupervisorBonusJobHourEntry.Insert();
+    // end;
 }

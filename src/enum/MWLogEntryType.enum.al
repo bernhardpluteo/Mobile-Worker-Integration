@@ -34,4 +34,32 @@ enum 50202 "MW Log Entry Type"
     {
         Caption = 'Hours';
     }
+    value(10; "Create Department")
+    {
+        Caption = 'Create Department';
+    }
+    value(11; "Update Department")
+    {
+        Caption = 'Update Department';
+    }
+    value(12; "Create Cost Center Group")
+    {
+        Caption = 'Create Cost Center Group';
+    }
+    value(13; "Update Cost Center Group")
+    {
+        Caption = 'Update Cost Center Group';
+    }
+    value(14; "Create Cost Center")
+    {
+        Caption = 'Create Cost Center';
+    }
+    value(15; "Update Cost Center")
+    {
+        Caption = 'Update Cost Center';
+    }
+    value(20; "Create User")
+    {
+        Caption = 'Create User';
+    }
 }

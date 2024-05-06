@@ -108,7 +108,7 @@ tableextension 50201 "Job MW Intg. Ext" extends Job
             if Change then
                 MobileWorkerIntegrationMngt.UpdateOrder(Rec."Mobile Worker Order ID", JSONObject);
         end else
-            if (Rec.Description <> '') and (Rec."Sell-to Customer No." <> '') and (Rec."Project No." <> '') then
+            if (Rec.Description <> '') and (Rec."Sell-to Customer No." <> '') and (Rec."Project No." <> '') and (Rec."Global Dimension 1 Code" <> '') then
                 MobileWorkerIntegrationMngt.CreateJobAsOrder(Rec);
     end;
 }

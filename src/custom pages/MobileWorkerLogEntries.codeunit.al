@@ -1,10 +1,10 @@
 page 50200 "Mobile Worker Log Entries"
 {
     ApplicationArea = All;
+    UsageCategory = Lists;
     Caption = 'Mobile Worker Log Entries';
     PageType = List;
     SourceTable = "Mobile Worker Log Entry";
-    UsageCategory = Lists;
     Editable = false;
 
     layout
@@ -13,6 +13,10 @@ page 50200 "Mobile Worker Log Entries"
         {
             repeater(General)
             {
+                field(SystemCreatedAt; Rec.SystemCreatedAt)
+                {
+                    ApplicationArea = All;
+                }
                 field(Status; Rec."Request Status")
                 {
                     ToolTip = 'Specifies the value of the Status field.';

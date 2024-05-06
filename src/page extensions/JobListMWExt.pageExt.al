@@ -17,7 +17,10 @@ pageextension 50201 "Job List MW Ext" extends "Job List"
                     MobileWorker: Codeunit "Mobile Worker Integration Mngt";
                 begin
                     if Rec."Mobile Worker Order ID" = '' then
-                        MobileWorker.CreateJobAsOrder(Rec)
+                        if not (Rec."Global Dimension 1 Code" = '') then
+                            MobileWorker.CreateJobAsOrder(Rec)
+                        else
+                            Error(StrSubstNo(DepartmentRequired))
                     else
                         Error(StrSubstNo(JobExistsLbl, Rec."Mobile Worker Order ID"));
                 end;
@@ -41,4 +44,5 @@ pageextension 50201 "Job List MW Ext" extends "Job List"
     }
     var
         JobExistsLbl: Label 'Job already exists in Mobile Worker as Order %1';
+        DepartmentRequired: Label 'Global Dimension 1(Department) Required on Job';
 }

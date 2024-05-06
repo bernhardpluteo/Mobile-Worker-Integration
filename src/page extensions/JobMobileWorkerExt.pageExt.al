@@ -20,14 +20,6 @@ pageextension 50203 "Job Mobile Worker Ext" extends "Job Card"
                 Visible = false;
             }
         }
-        addafter("No.")
-        {
-            field("Mobile Worker Order ID"; Rec."Mobile Worker Order ID")
-            {
-                ApplicationArea = All;
-                ToolTip = 'Specifies the value of the Mobile Worker Order ID field.';
-            }
-        }
         addafter("Extended Job Status")
         {
             field("Mobile Worker Error Message"; Rec."Mobile Worker Error Message")
@@ -38,9 +30,22 @@ pageextension 50203 "Job Mobile Worker Ext" extends "Job Card"
                 StyleExpr = 'Unfavorable';
                 Editable = false;
             }
+            field("Mobile Worker Order ID"; Rec."Mobile Worker Order ID")
+            {
+                ApplicationArea = All;
+                ToolTip = 'Specifies the value of the Mobile Worker Order ID field.';
+            }
         }
     }
     trigger OnOpenPage()
+    begin
+        if Rec."Extended Job Status" = Enum::"Extended Job Status"::Error then
+            ErrorMsg := true
+        else
+            ErrorMsg := false;
+    end;
+
+    trigger OnAfterGetCurrRecord()
     begin
         if Rec."Extended Job Status" = Enum::"Extended Job Status"::Error then
             ErrorMsg := true

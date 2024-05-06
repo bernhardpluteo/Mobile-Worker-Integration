@@ -2,20 +2,20 @@
   "id": "b4cc29c4-f93d-4113-b7f9-a0dc9b791afd",
   "name": "Mobile Worker Integration",
   "publisher": "Pluteo (Pty) Ltd",
-  "version": "1.0.0.0",
+  "version": "1.0.0.20",
   "brief": "",
   "description": "",
   "privacyStatement": "",
   "EULA": "",
   "help": "",
   "url": "",
-  "logo": "",
+  "logo": "Pluteo - Visual Stamp.png",
   "dependencies": [
     {
       "id": "1cfb30b3-e464-4594-9510-f6693472e0cc",
       "name": "Job Management",
       "publisher": "Pluteo (Pty) Ltd",
-      "version": "1.0.0.11"
+      "version": "1.0.0.30"
     },
     {
       "id": "e9d5d908-2671-4e74-bf92-dc15776ae948",
