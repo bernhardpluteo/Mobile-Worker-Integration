@@ -34,6 +34,7 @@ pageextension 50203 "Job Mobile Worker Ext" extends "Job Card"
             {
                 ApplicationArea = All;
                 ToolTip = 'Specifies the value of the Mobile Worker Order ID field.';
+                Visible = false;
             }
         }
     }

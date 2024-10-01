@@ -17,20 +17,24 @@ pageextension 50206 "Sales Order MW Ingt Ext " extends "Sales Order"
                 ApplicationArea = All;
                 ToolTip = 'Specifies the value of the Mobile Worker Error Message field.';
                 Editable = false;
+                Visible = false;
             }
             field("Mobile Worker Customer ID"; Rec."Mobile Worker Customer ID")
             {
                 ApplicationArea = All;
                 ToolTip = 'Specifies the value of the Mobile Worker Error Message field.';
+                Visible = false;
             }
             field("Mobile Worker Project ID"; Rec."Mobile Worker Project ID")
             {
                 ApplicationArea = All;
                 ToolTip = 'Specifies the value of the Mobile Worker Error Message field.';
+                Visible = false;
             }
             field("Mobile Worker Supervisor ID"; Rec."Mobile Worker Supervisor ID")
             {
                 ApplicationArea = All;
+                Visible = false;
             }
         }
     }
